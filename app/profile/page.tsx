@@ -26,9 +26,14 @@ import {
 } from "lucide-react"
 import { 
   getCurrentUser, 
-  getIdeas, 
+  getIdeas,
+  getJoinRequests,
+  updateIdea,
+  updateUser,
+  getUserById,
   type User,
-  type Idea
+  type Idea,
+  type JoinRequest
 } from "@/lib/store"
 
 export default function ProfilePage() {
@@ -36,22 +41,75 @@ export default function ProfilePage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [userIdeas, setUserIdeas] = useState<Idea[]>([])
   const [joinedProjects, setJoinedProjects] = useState<Idea[]>([])
+  const [pendingRequests, setPendingRequests] = useState<(JoinRequest & { ideaTitle: string })[]>([])
   const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: "success" | "error" | "info" }>({
     isVisible: false,
     message: "",
     type: "success",
   })
 
-  useEffect(() => {
+  const loadData = () => {
     const user = getCurrentUser()
     setCurrentUser(user)
 
     if (user) {
       const allIdeas = getIdeas()
-      setUserIdeas(allIdeas.filter((idea) => idea.postedBy === user.id))
+      const userPostedIdeas = allIdeas.filter((idea) => idea.postedBy === user.id)
+      setUserIdeas(userPostedIdeas)
       setJoinedProjects(allIdeas.filter((idea) => idea.teamMembers.includes(user.id) && idea.postedBy !== user.id))
+      
+      // Get pending join requests for user's ideas
+      const allRequests = getJoinRequests()
+      const userIdeaIds = userPostedIdeas.map(idea => idea.id)
+      const pending = allRequests
+        .filter(req => userIdeaIds.includes(req.ideaId) && req.status === 'pending')
+        .map(req => ({
+          ...req,
+          ideaTitle: allIdeas.find(idea => idea.id === req.ideaId)?.title || 'Unknown Idea'
+        }))
+      setPendingRequests(pending)
     }
+  }
+
+  useEffect(() => {
+    loadData()
   }, [])
+
+  const handleAcceptRequest = (request: JoinRequest & { ideaTitle: string }) => {
+    // Update the join request status
+    const allRequests = getJoinRequests()
+    const updatedRequests = allRequests.map(req => 
+      req.id === request.id ? { ...req, status: 'accepted' as const } : req
+    )
+    localStorage.setItem('build_together_join_requests', JSON.stringify(updatedRequests))
+    
+    // Add user to team members
+    const idea = getIdeas().find(i => i.id === request.ideaId)
+    if (idea && !idea.teamMembers.includes(request.userId)) {
+      updateIdea(request.ideaId, { teamMembers: [...idea.teamMembers, request.userId] })
+      
+      // Update the joining user's projectsJoined
+      const joiningUser = getUserById(request.userId)
+      if (joiningUser && !joiningUser.projectsJoined.includes(request.ideaId)) {
+        updateUser(request.userId, { projectsJoined: [...joiningUser.projectsJoined, request.ideaId] })
+      }
+    }
+    
+    setToast({ isVisible: true, message: `${request.userName} has been added to the team!`, type: "success" })
+    loadData()
+  }
+
+  const handleRejectRequest = (request: JoinRequest & { ideaTitle: string }) => {
+    // Update the join request status
+    const allRequests = getJoinRequests()
+    const updatedRequests = allRequests.map(req => 
+      req.id === request.id ? { ...req, status: 'rejected' as const } : req
+    )
+    localStorage.setItem('build_together_join_requests', JSON.stringify(updatedRequests))
+    
+    setToast({ isVisible: true, message: `Request from ${request.userName} has been declined.`, type: "info" })
+    loadData()
+  }
 
   if (!currentUser) {
     return (
@@ -199,6 +257,66 @@ export default function ProfilePage() {
             </div>
           </div>
         </section>
+
+        {/* Join Requests */}
+        {pendingRequests.length > 0 && (
+          <section className="border-b border-border">
+            <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                <Mail className="h-5 w-5 text-chart-4" />
+                Pending Join Requests
+                <Badge variant="secondary" className="ml-2">{pendingRequests.length}</Badge>
+              </h2>
+              <div className="mt-4 space-y-4">
+                {pendingRequests.map((request) => (
+                  <div key={request.id} className="rounded-lg border border-border bg-card p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="bg-primary/10 text-sm text-primary">
+                              {request.userName.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium text-foreground">{request.userName}</p>
+                            <p className="text-xs text-muted-foreground">wants to join <span className="text-primary">{request.ideaTitle}</span></p>
+                          </div>
+                        </div>
+                        {request.message && (
+                          <p className="mt-3 rounded-lg bg-secondary/50 p-3 text-sm text-muted-foreground">
+                            &ldquo;{request.message}&rdquo;
+                          </p>
+                        )}
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          <Calendar className="mr-1 inline h-3 w-3" />
+                          {new Date(request.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          onClick={() => handleAcceptRequest(request)}
+                          className="bg-accent text-accent-foreground hover:bg-accent/90"
+                        >
+                          <CheckCircle className="mr-1 h-4 w-4" />
+                          Accept
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleRejectRequest(request)}
+                        >
+                          Decline
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Content */}
         <section className="py-12">
