@@ -27,6 +27,8 @@ import {
   getUserByEmail, 
   createUser, 
   setCurrentUser,
+  initializeSampleData,
+  getUsers,
   type User as UserType
 } from "@/lib/store"
 
@@ -77,10 +79,17 @@ function LoginContent() {
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
+    // Initialize sample data if not already done
+    initializeSampleData()
+    
     const mode = searchParams.get("mode")
     if (mode === "signup") {
       setActiveTab("signup")
     }
+    
+    // Debug: Log available users
+    const users = getUsers()
+    console.log("[v0] Available users for login:", users.map(u => ({ email: u.email, name: u.name })))
   }, [searchParams])
 
   const handleLogin = (e: React.FormEvent) => {
@@ -96,13 +105,17 @@ function LoginContent() {
     }
 
     // Check if user exists
+    console.log("[v0] Attempting login with email:", loginData.email)
     const user = getUserByEmail(loginData.email)
+    console.log("[v0] Found user:", user ? { id: user.id, email: user.email, name: user.name } : null)
+    
     if (!user) {
       setToast({ isVisible: true, message: "User not found. Please sign up.", type: "error" })
       return
     }
 
     if (user.password !== loginData.password) {
+      console.log("[v0] Password mismatch for user:", user.email)
       setToast({ isVisible: true, message: "Invalid password", type: "error" })
       return
     }
@@ -242,9 +255,11 @@ function LoginContent() {
                   Sign In
                 </Button>
 
-                <p className="text-center text-sm text-muted-foreground">
-                  Demo accounts: alex@university.edu, sarah@tech.com, mike@college.edu (password: password123)
-                </p>
+                <div className="rounded-lg border border-border bg-secondary/30 p-3 text-center text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">Demo Accounts:</p>
+                  <p className="mt-1">alex@university.edu | sarah@tech.com | mike@college.edu</p>
+                  <p className="mt-0.5 text-xs">Password: password123</p>
+                </div>
               </form>
             </TabsContent>
 
