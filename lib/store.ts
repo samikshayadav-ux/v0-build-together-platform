@@ -6,6 +6,8 @@ export interface User {
   name: string
   email: string
   password: string
+  bio?: string
+  profilePicture?: string
   skills: string[]
   linkedIn?: string
   collegeEmail?: string
@@ -64,6 +66,39 @@ export interface Comment {
   createdAt: string
 }
 
+export interface Notification {
+  id: string
+  type: 'join_request' | 'idea_view' | 'profile_view' | 'nda_signed' | 'join_accepted' | 'join_rejected'
+  fromUserId: string
+  fromUserName: string
+  toUserId: string
+  ideaId?: string
+  ideaTitle?: string
+  message?: string
+  read: boolean
+  createdAt: string
+}
+
+export interface ProfileView {
+  id: string
+  viewerId: string
+  viewerName: string
+  viewedUserId: string
+  timestamp: string
+}
+
+export interface CollaboratorRating {
+  id: string
+  fromUserId: string
+  fromUserName: string
+  toUserId: string
+  ideaId: string
+  ideaTitle: string
+  rating: number
+  review?: string
+  createdAt: string
+}
+
 // Storage keys
 const USERS_KEY = 'build_together_users'
 const IDEAS_KEY = 'build_together_ideas'
@@ -72,6 +107,9 @@ const NDA_AGREEMENTS_KEY = 'build_together_nda_agreements'
 const CURRENT_USER_KEY = 'build_together_current_user'
 const JOIN_REQUESTS_KEY = 'build_together_join_requests'
 const COMMENTS_KEY = 'build_together_comments'
+const NOTIFICATIONS_KEY = 'build_together_notifications'
+const PROFILE_VIEWS_KEY = 'build_together_profile_views'
+const RATINGS_KEY = 'build_together_ratings'
 
 // Helper to get data from localStorage
 function getStorageItem<T>(key: string, defaultValue: T): T {
@@ -198,6 +236,19 @@ export function logAccess(userId: string, userName: string, ideaId: string, idea
     timestamp: new Date().toISOString()
   })
   setStorageItem(ACCESS_LOGS_KEY, logs)
+  
+  // Create notification for idea owner (only if not the owner viewing their own idea)
+  const idea = getIdeaById(ideaId)
+  if (idea && idea.postedBy !== userId) {
+    createNotification({
+      type: 'idea_view',
+      fromUserId: userId,
+      fromUserName: userName,
+      toUserId: idea.postedBy,
+      ideaId: idea.id,
+      ideaTitle: idea.title
+    })
+  }
 }
 
 // NDA functions
@@ -209,14 +260,30 @@ export function hasSignedNda(userId: string, ideaId: string): boolean {
   return getNdaAgreements().some(nda => nda.userId === userId && nda.ideaId === ideaId)
 }
 
-export function signNda(userId: string, ideaId: string): void {
+export function signNda(userId: string, userName: string, ideaId: string): NdaAgreement {
   const agreements = getNdaAgreements()
-  agreements.push({
+  const newAgreement: NdaAgreement = {
     userId,
     ideaId,
     agreedAt: new Date().toISOString()
-  })
+  }
+  agreements.push(newAgreement)
   setStorageItem(NDA_AGREEMENTS_KEY, agreements)
+  
+  // Create notification for idea owner
+  const idea = getIdeaById(ideaId)
+  if (idea && idea.postedBy !== userId) {
+    createNotification({
+      type: 'nda_signed',
+      fromUserId: userId,
+      fromUserName: userName,
+      toUserId: idea.postedBy,
+      ideaId: idea.id,
+      ideaTitle: idea.title
+    })
+  }
+  
+  return newAgreement
 }
 
 // Join request functions
@@ -241,6 +308,21 @@ export function createJoinRequest(ideaId: string, userId: string, userName: stri
   }
   requests.push(newRequest)
   setStorageItem(JOIN_REQUESTS_KEY, requests)
+  
+  // Create notification for idea owner
+  const idea = getIdeaById(ideaId)
+  if (idea) {
+    createNotification({
+      type: 'join_request',
+      fromUserId: userId,
+      fromUserName: userName,
+      toUserId: idea.postedBy,
+      ideaId: idea.id,
+      ideaTitle: idea.title,
+      message
+    })
+  }
+  
   return newRequest
 }
 
@@ -266,6 +348,145 @@ export function createComment(ideaId: string, userId: string, userName: string, 
   comments.push(newComment)
   setStorageItem(COMMENTS_KEY, comments)
   return newComment
+}
+
+// Notification functions
+export function getNotifications(): Notification[] {
+  return getStorageItem<Notification[]>(NOTIFICATIONS_KEY, [])
+}
+
+export function getNotificationsForUser(userId: string): Notification[] {
+  return getNotifications()
+    .filter(n => n.toUserId === userId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+}
+
+export function getUnreadNotificationCount(userId: string): number {
+  return getNotifications().filter(n => n.toUserId === userId && !n.read).length
+}
+
+export function createNotification(notification: Omit<Notification, 'id' | 'read' | 'createdAt'>): Notification {
+  const notifications = getNotifications()
+  const newNotification: Notification = {
+    ...notification,
+    id: generateId(),
+    read: false,
+    createdAt: new Date().toISOString()
+  }
+  notifications.push(newNotification)
+  setStorageItem(NOTIFICATIONS_KEY, notifications)
+  return newNotification
+}
+
+export function markNotificationAsRead(notificationId: string): void {
+  const notifications = getNotifications()
+  const index = notifications.findIndex(n => n.id === notificationId)
+  if (index !== -1) {
+    notifications[index].read = true
+    setStorageItem(NOTIFICATIONS_KEY, notifications)
+  }
+}
+
+export function markAllNotificationsAsRead(userId: string): void {
+  const notifications = getNotifications()
+  const updated = notifications.map(n => 
+    n.toUserId === userId ? { ...n, read: true } : n
+  )
+  setStorageItem(NOTIFICATIONS_KEY, updated)
+}
+
+// Profile view functions
+export function getProfileViews(): ProfileView[] {
+  return getStorageItem<ProfileView[]>(PROFILE_VIEWS_KEY, [])
+}
+
+export function logProfileView(viewerId: string, viewerName: string, viewedUserId: string): void {
+  const views = getProfileViews()
+  views.push({
+    id: generateId(),
+    viewerId,
+    viewerName,
+    viewedUserId,
+    timestamp: new Date().toISOString()
+  })
+  setStorageItem(PROFILE_VIEWS_KEY, views)
+  
+  // Create notification for profile owner (if not viewing own profile)
+  if (viewerId !== viewedUserId) {
+    createNotification({
+      type: 'profile_view',
+      fromUserId: viewerId,
+      fromUserName: viewerName,
+      toUserId: viewedUserId
+    })
+  }
+}
+
+// Collaborator rating functions
+export function getRatings(): CollaboratorRating[] {
+  return getStorageItem<CollaboratorRating[]>(RATINGS_KEY, [])
+}
+
+export function getRatingsForUser(userId: string): CollaboratorRating[] {
+  return getRatings().filter(r => r.toUserId === userId)
+}
+
+export function getRatingByUsers(fromUserId: string, toUserId: string): CollaboratorRating | undefined {
+  return getRatings().find(r => r.fromUserId === fromUserId && r.toUserId === toUserId)
+}
+
+export function getCollaborators(userId: string): string[] {
+  // Get all ideas where the user is a team member
+  const ideas = getIdeas()
+  const collaboratorIds = new Set<string>()
+  
+  ideas.forEach(idea => {
+    if (idea.teamMembers.includes(userId)) {
+      idea.teamMembers.forEach(memberId => {
+        if (memberId !== userId) {
+          collaboratorIds.add(memberId)
+        }
+      })
+    }
+  })
+  
+  return Array.from(collaboratorIds)
+}
+
+export function createRating(ratingData: Omit<CollaboratorRating, 'id' | 'createdAt'>): CollaboratorRating {
+  const ratings = getRatings()
+  
+  // Check if already rated - if so, update
+  const existingIndex = ratings.findIndex(r => 
+    r.fromUserId === ratingData.fromUserId && r.toUserId === ratingData.toUserId
+  )
+  
+  if (existingIndex !== -1) {
+    ratings[existingIndex] = {
+      ...ratings[existingIndex],
+      ...ratingData,
+      createdAt: new Date().toISOString()
+    }
+    setStorageItem(RATINGS_KEY, ratings)
+    return ratings[existingIndex]
+  }
+  
+  const newRating: CollaboratorRating = {
+    ...ratingData,
+    id: generateId(),
+    createdAt: new Date().toISOString()
+  }
+  ratings.push(newRating)
+  setStorageItem(RATINGS_KEY, ratings)
+  
+  // Update user's reputation
+  const userRatings = getRatingsForUser(ratingData.toUserId)
+  if (userRatings.length > 0) {
+    const avgRating = userRatings.reduce((sum, r) => sum + r.rating, 0) / userRatings.length
+    updateUser(ratingData.toUserId, { reputation: avgRating })
+  }
+  
+  return newRating
 }
 
 // Initialize with sample data

@@ -4,16 +4,21 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Menu, X, Rocket, User, LogOut } from "lucide-react"
-import { getCurrentUser, logout, type User as UserType } from "@/lib/store"
+import { Menu, X, Rocket, User, LogOut, Bell } from "lucide-react"
+import { getCurrentUser, logout, getUnreadNotificationCount, type User as UserType } from "@/lib/store"
 
 export function Navbar() {
   const pathname = usePathname()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState<UserType | null>(null)
+  const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
-    setCurrentUser(getCurrentUser())
+    const user = getCurrentUser()
+    setCurrentUser(user)
+    if (user) {
+      setUnreadCount(getUnreadNotificationCount(user.id))
+    }
   }, [pathname])
 
   const handleLogout = () => {
@@ -62,6 +67,17 @@ export function Navbar() {
           <div className="hidden items-center gap-3 md:flex">
             {currentUser ? (
               <div className="flex items-center gap-3">
+                <Link 
+                  href="/notifications" 
+                  className="relative rounded-lg p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                >
+                  <Bell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </Link>
                 <Link href="/profile" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
                   <User className="h-4 w-4" />
                   {currentUser.name}
@@ -117,6 +133,21 @@ export function Navbar() {
             <div className="border-t border-border pt-4">
               {currentUser ? (
                 <div className="space-y-2">
+                  <Link
+                    href="/notifications"
+                    className="flex items-center justify-between rounded-lg px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Bell className="h-4 w-4" />
+                      Notifications
+                    </div>
+                    {unreadCount > 0 && (
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
+                  </Link>
                   <div className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
                     <User className="h-4 w-4" />
                     {currentUser.name}

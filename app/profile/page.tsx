@@ -156,6 +156,9 @@ export default function ProfilePage() {
               <div className="flex-1 text-center md:text-left">
                 <h1 className="text-2xl font-bold text-foreground">{currentUser.name}</h1>
                 <p className="mt-1 text-muted-foreground">{currentUser.email}</p>
+                {currentUser.bio && (
+                  <p className="mt-2 text-sm text-muted-foreground">{currentUser.bio}</p>
+                )}
 
                 {/* Verification Badges */}
                 <div className="mt-4 flex flex-wrap justify-center gap-2 md:justify-start">
@@ -209,10 +212,12 @@ export default function ProfilePage() {
 
               {/* Actions */}
               <div className="flex gap-2">
-                <Button variant="outline" size="sm">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Edit Profile
-                </Button>
+                <Link href="/profile/edit">
+                  <Button variant="outline" size="sm">
+                    <Settings className="mr-2 h-4 w-4" />
+                    Edit Profile
+                  </Button>
+                </Link>
               </div>
             </div>
           </div>

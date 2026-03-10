@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { NdaModal } from "@/components/nda-modal"
@@ -79,7 +80,7 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
   const handleNdaAccept = () => {
     if (!currentUser || !idea) return
     
-    signNda(currentUser.id, idea.id)
+    signNda(currentUser.id, currentUser.name, idea.id)
     logAccess(currentUser.id, currentUser.name, idea.id, idea.title)
     setHasAccess(true)
     setShowNdaModal(false)
@@ -165,9 +166,17 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                 <h1 className="text-2xl font-bold text-foreground sm:text-3xl">{idea.title}</h1>
                 <p className="mt-2 text-muted-foreground">{idea.problemStatement}</p>
               </div>
-              <div className="flex items-center gap-2 rounded-lg bg-accent/10 px-3 py-2 text-sm text-accent">
-                <Shield className="h-4 w-4" />
-                <span>NDA Protected</span>
+              <div className="flex flex-col items-end gap-2">
+                <div className="flex items-center gap-2 rounded-lg bg-accent/10 px-3 py-2 text-sm text-accent">
+                  <Shield className="h-4 w-4" />
+                  <span>NDA Protected</span>
+                </div>
+                {hasAccess && (
+                  <Badge className="bg-chart-4/10 text-chart-4">
+                    <CheckCircle className="mr-1 h-3 w-3" />
+                    NDA Signed
+                  </Badge>
+                )}
               </div>
             </div>
 
@@ -275,14 +284,14 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                   {/* Posted By */}
                   <div className="rounded-xl border border-border bg-card p-6">
                     <h3 className="text-sm font-medium text-muted-foreground">Posted By</h3>
-                    <div className="mt-4 flex items-center gap-3">
+                    <Link href={`/user/${idea.postedBy}`} className="mt-4 flex items-center gap-3 group">
                       <Avatar className="h-12 w-12">
                         <AvatarFallback className="bg-primary/10 text-primary">
                           {idea.postedByName.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-medium text-foreground">{idea.postedByName}</p>
+                        <p className="font-medium text-foreground group-hover:text-primary">{idea.postedByName}</p>
                         <div className="flex items-center gap-2 mt-1">
                           {poster?.isVerifiedStudent && (
                             <Badge variant="outline" className="text-xs gap-1">
@@ -304,7 +313,7 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                           </span>
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   </div>
 
                   {/* Join Project */}
@@ -334,19 +343,19 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                       {idea.teamMembers.map((memberId) => {
                         const member = getUserById(memberId)
                         return member ? (
-                          <div key={memberId} className="flex items-center gap-3">
+                          <Link key={memberId} href={`/user/${memberId}`} className="flex items-center gap-3 group">
                             <Avatar className="h-8 w-8">
                               <AvatarFallback className="bg-secondary text-sm">
                                 {member.name.charAt(0)}
                               </AvatarFallback>
                             </Avatar>
                             <div>
-                              <p className="text-sm font-medium text-foreground">{member.name}</p>
+                              <p className="text-sm font-medium text-foreground group-hover:text-primary">{member.name}</p>
                               <p className="text-xs text-muted-foreground">
                                 {member.skills.slice(0, 2).join(", ")}
                               </p>
                             </div>
-                          </div>
+                          </Link>
                         ) : null
                       })}
                     </div>
