@@ -28,6 +28,7 @@ import {
   getCurrentUser, 
   getIdeas,
   getJoinRequests,
+  updateJoinRequest,
   updateIdea,
   updateUser,
   getUserById,
@@ -76,12 +77,8 @@ export default function ProfilePage() {
   }, [])
 
   const handleAcceptRequest = (request: JoinRequest & { ideaTitle: string }) => {
-    // Update the join request status
-    const allRequests = getJoinRequests()
-    const updatedRequests = allRequests.map(req => 
-      req.id === request.id ? { ...req, status: 'accepted' as const } : req
-    )
-    localStorage.setItem('build_together_join_requests', JSON.stringify(updatedRequests))
+    // Update the join request status (this also sends notification)
+    updateJoinRequest(request.id, 'accepted')
     
     // Add user to team members
     const idea = getIdeas().find(i => i.id === request.ideaId)
@@ -100,12 +97,8 @@ export default function ProfilePage() {
   }
 
   const handleRejectRequest = (request: JoinRequest & { ideaTitle: string }) => {
-    // Update the join request status
-    const allRequests = getJoinRequests()
-    const updatedRequests = allRequests.map(req => 
-      req.id === request.id ? { ...req, status: 'rejected' as const } : req
-    )
-    localStorage.setItem('build_together_join_requests', JSON.stringify(updatedRequests))
+    // Update the join request status (this also sends notification)
+    updateJoinRequest(request.id, 'rejected')
     
     setToast({ isVisible: true, message: `Request from ${request.userName} has been declined.`, type: "info" })
     loadData()
@@ -357,27 +350,32 @@ export default function ProfilePage() {
                     </div>
                   ) : (
                     userIdeas.map((idea) => (
-                      <Link key={idea.id} href={`/idea/${idea.id}`}>
-                        <div className="group rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/30">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h3 className="font-medium text-foreground group-hover:text-primary">
-                                {idea.title}
-                              </h3>
-                              <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
-                                {idea.problemStatement}
-                              </p>
-                            </div>
-                            <Badge variant="secondary" className="ml-2 shrink-0">
-                              {idea.teamMembers.length} member{idea.teamMembers.length !== 1 ? "s" : ""}
-                            </Badge>
-                          </div>
-                          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                      <div key={idea.id} className="rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/30">
+                        <div className="flex items-start justify-between">
+                          <Link href={`/idea/${idea.id}`} className="flex-1 group">
+                            <h3 className="font-medium text-foreground group-hover:text-primary">
+                              {idea.title}
+                            </h3>
+                            <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
+                              {idea.problemStatement}
+                            </p>
+                          </Link>
+                          <Badge variant="secondary" className="ml-2 shrink-0">
+                            {idea.teamMembers.length} member{idea.teamMembers.length !== 1 ? "s" : ""}
+                          </Badge>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Shield className="h-3 w-3 text-accent" />
                             <span>Posted: {idea.timestamp}</span>
                           </div>
+                          <Link href={`/project/${idea.id}`}>
+                            <Button variant="outline" size="sm" className="h-7 text-xs">
+                              Open Workspace
+                            </Button>
+                          </Link>
                         </div>
-                      </Link>
+                      </div>
                     ))
                   )}
                 </div>
@@ -413,24 +411,29 @@ export default function ProfilePage() {
                     </div>
                   ) : (
                     joinedProjects.map((idea) => (
-                      <Link key={idea.id} href={`/idea/${idea.id}`}>
-                        <div className="group rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/30">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h3 className="font-medium text-foreground group-hover:text-primary">
-                                {idea.title}
-                              </h3>
-                              <p className="mt-1 text-sm text-muted-foreground">
-                                by {idea.postedByName}
-                              </p>
-                            </div>
-                            <Badge className="ml-2 shrink-0 bg-accent/10 text-accent">
-                              <CheckCircle className="mr-1 h-3 w-3" />
-                              Joined
-                            </Badge>
-                          </div>
+                      <div key={idea.id} className="rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/30">
+                        <div className="flex items-start justify-between">
+                          <Link href={`/idea/${idea.id}`} className="flex-1 group">
+                            <h3 className="font-medium text-foreground group-hover:text-primary">
+                              {idea.title}
+                            </h3>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              by {idea.postedByName}
+                            </p>
+                          </Link>
+                          <Badge className="ml-2 shrink-0 bg-accent/10 text-accent">
+                            <CheckCircle className="mr-1 h-3 w-3" />
+                            Joined
+                          </Badge>
                         </div>
-                      </Link>
+                        <div className="mt-3 flex justify-end">
+                          <Link href={`/project/${idea.id}`}>
+                            <Button variant="outline" size="sm" className="h-7 text-xs">
+                              Open Workspace
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
                     ))
                   )}
                 </div>

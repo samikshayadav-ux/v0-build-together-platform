@@ -99,6 +99,24 @@ export interface CollaboratorRating {
   createdAt: string
 }
 
+export interface ProjectMessage {
+  id: string
+  ideaId: string
+  userId: string
+  userName: string
+  content: string
+  createdAt: string
+}
+
+export type ProjectStatus = 'planning' | 'in_progress' | 'completed' | 'paused'
+
+export interface ProjectMeta {
+  ideaId: string
+  status: ProjectStatus
+  startedAt?: string
+  completedAt?: string
+}
+
 // Storage keys
 const USERS_KEY = 'build_together_users'
 const IDEAS_KEY = 'build_together_ideas'
@@ -110,6 +128,8 @@ const COMMENTS_KEY = 'build_together_comments'
 const NOTIFICATIONS_KEY = 'build_together_notifications'
 const PROFILE_VIEWS_KEY = 'build_together_profile_views'
 const RATINGS_KEY = 'build_together_ratings'
+const PROJECT_MESSAGES_KEY = 'build_together_project_messages'
+const PROJECT_META_KEY = 'build_together_project_meta'
 
 // Helper to get data from localStorage
 function getStorageItem<T>(key: string, defaultValue: T): T {
@@ -293,6 +313,34 @@ export function getJoinRequests(): JoinRequest[] {
 
 export function getJoinRequestsForIdea(ideaId: string): JoinRequest[] {
   return getJoinRequests().filter(req => req.ideaId === ideaId)
+}
+
+export function updateJoinRequest(requestId: string, status: 'accepted' | 'rejected'): JoinRequest | undefined {
+  const requests = getJoinRequests()
+  const index = requests.findIndex(req => req.id === requestId)
+  if (index === -1) return undefined
+  
+  requests[index].status = status
+  setStorageItem(JOIN_REQUESTS_KEY, requests)
+  
+  // Get idea and requester info for notification
+  const request = requests[index]
+  const idea = getIdeaById(request.ideaId)
+  const ideaOwner = idea ? getUserById(idea.postedBy) : undefined
+  
+  if (idea && ideaOwner) {
+    // Send notification to the person who requested
+    createNotification({
+      type: status === 'accepted' ? 'join_accepted' : 'join_rejected',
+      fromUserId: ideaOwner.id,
+      fromUserName: ideaOwner.name,
+      toUserId: request.userId,
+      ideaId: idea.id,
+      ideaTitle: idea.title
+    })
+  }
+  
+  return requests[index]
 }
 
 export function createJoinRequest(ideaId: string, userId: string, userName: string, message: string): JoinRequest {
@@ -487,6 +535,57 @@ export function createRating(ratingData: Omit<CollaboratorRating, 'id' | 'create
   }
   
   return newRating
+}
+
+// Project message functions
+export function getProjectMessages(ideaId: string): ProjectMessage[] {
+  const messages = getStorageItem<ProjectMessage[]>(PROJECT_MESSAGES_KEY, [])
+  return messages
+    .filter(m => m.ideaId === ideaId)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+}
+
+export function createProjectMessage(ideaId: string, userId: string, userName: string, content: string): ProjectMessage {
+  const messages = getStorageItem<ProjectMessage[]>(PROJECT_MESSAGES_KEY, [])
+  const newMessage: ProjectMessage = {
+    id: generateId(),
+    ideaId,
+    userId,
+    userName,
+    content,
+    createdAt: new Date().toISOString()
+  }
+  messages.push(newMessage)
+  setStorageItem(PROJECT_MESSAGES_KEY, messages)
+  return newMessage
+}
+
+// Project meta functions
+export function getProjectMeta(ideaId: string): ProjectMeta | undefined {
+  const metas = getStorageItem<ProjectMeta[]>(PROJECT_META_KEY, [])
+  return metas.find(m => m.ideaId === ideaId)
+}
+
+export function updateProjectMeta(ideaId: string, updates: Partial<Omit<ProjectMeta, 'ideaId'>>): ProjectMeta {
+  const metas = getStorageItem<ProjectMeta[]>(PROJECT_META_KEY, [])
+  const index = metas.findIndex(m => m.ideaId === ideaId)
+  
+  if (index === -1) {
+    // Create new meta
+    const newMeta: ProjectMeta = {
+      ideaId,
+      status: 'planning',
+      ...updates
+    }
+    metas.push(newMeta)
+    setStorageItem(PROJECT_META_KEY, metas)
+    return newMeta
+  }
+  
+  // Update existing meta
+  metas[index] = { ...metas[index], ...updates }
+  setStorageItem(PROJECT_META_KEY, metas)
+  return metas[index]
 }
 
 // Initialize with sample data

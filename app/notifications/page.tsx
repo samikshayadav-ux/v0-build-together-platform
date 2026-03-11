@@ -44,11 +44,49 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     loadData()
+    
+    // Auto-mark all as read after viewing page for 2 seconds
+    const timer = setTimeout(() => {
+      const user = getCurrentUser()
+      if (user) {
+        markAllNotificationsAsRead(user.id)
+      }
+    }, 2000)
+    
+    return () => clearTimeout(timer)
   }, [])
 
-  const handleMarkAsRead = (notificationId: string) => {
-    markNotificationAsRead(notificationId)
-    loadData()
+  const handleNotificationClick = (notification: Notification) => {
+    // Mark as read first
+    if (!notification.read) {
+      markNotificationAsRead(notification.id)
+    }
+    
+    // Navigate based on notification type
+    switch (notification.type) {
+      case 'join_request':
+        router.push('/profile')
+        break
+      case 'idea_view':
+      case 'nda_signed':
+        if (notification.ideaId) {
+          router.push(`/idea/${notification.ideaId}`)
+        }
+        break
+      case 'profile_view':
+        router.push(`/user/${notification.fromUserId}`)
+        break
+      case 'join_accepted':
+        if (notification.ideaId) {
+          router.push(`/project/${notification.ideaId}`)
+        }
+        break
+      case 'join_rejected':
+        if (notification.ideaId) {
+          router.push(`/idea/${notification.ideaId}`)
+        }
+        break
+    }
   }
 
   const handleMarkAllAsRead = () => {
@@ -233,12 +271,12 @@ export default function NotificationsPage() {
                 {notifications.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`group rounded-lg border bg-card p-4 transition-colors ${
+                    className={`group cursor-pointer rounded-lg border bg-card p-4 transition-colors hover:bg-secondary/50 ${
                       notification.read 
                         ? "border-border" 
                         : "border-primary/30 bg-primary/5"
                     }`}
-                    onClick={() => !notification.read && handleMarkAsRead(notification.id)}
+                    onClick={() => handleNotificationClick(notification)}
                   >
                     <div className="flex items-start gap-4">
                       {/* Icon */}

@@ -21,7 +21,8 @@ import {
   ArrowLeft, 
   Star,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Settings
 } from "lucide-react"
 import { 
   getIdeaById, 
@@ -61,14 +62,19 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
     setCurrentUser(user)
     
     if (fetchedIdea && user) {
+      // Idea owner gets automatic access without NDA
+      const isIdeaOwner = fetchedIdea.postedBy === user.id
       const signed = hasSignedNda(user.id, fetchedIdea.id)
-      setHasAccess(signed)
       
-      if (signed) {
-        // Log access on page load
-        logAccess(user.id, user.name, fetchedIdea.id, fetchedIdea.title)
+      if (isIdeaOwner || signed) {
+        setHasAccess(true)
         setComments(getCommentsForIdea(fetchedIdea.id))
+        // Only log access for non-owners
+        if (!isIdeaOwner && signed) {
+          logAccess(user.id, user.name, fetchedIdea.id, fetchedIdea.title)
+        }
       } else {
+        setHasAccess(false)
         setShowNdaModal(true)
       }
     } else if (!user) {
@@ -156,10 +162,20 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
         {/* Header */}
         <section className="border-b border-border bg-card">
           <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/browse")} className="mb-4">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Browse
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={() => router.push("/browse")} className="mb-4">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Browse
+              </Button>
+              {isOwner && (
+                <Link href={`/idea/${idea.id}/edit`}>
+                  <Button variant="outline" size="sm" className="mb-4">
+                    <Settings className="mr-2 h-4 w-4" />
+                    Edit Idea
+                  </Button>
+                </Link>
+              )}
+            </div>
 
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
@@ -316,8 +332,23 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                     </Link>
                   </div>
 
+                  {/* Project Space Link - for team members */}
+                  {hasJoined && (
+                    <div className="rounded-xl border border-primary/30 bg-primary/5 p-6">
+                      <h3 className="text-sm font-medium text-foreground">Project Space</h3>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Access your team workspace for collaboration and updates.
+                      </p>
+                      <Link href={`/project/${idea.id}`}>
+                        <Button className="mt-4 w-full">
+                          Open Project Space
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+
                   {/* Join Project */}
-                  {!isOwner && (
+                  {!isOwner && !hasJoined && (
                     <div className="rounded-xl border border-border bg-card p-6">
                       <h3 className="text-sm font-medium text-muted-foreground">Join This Project</h3>
                       <p className="mt-2 text-sm text-muted-foreground">
@@ -326,9 +357,8 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                       <Button 
                         className="mt-4 w-full" 
                         onClick={handleJoinProject}
-                        disabled={hasJoined}
                       >
-                        {hasJoined ? "Request Sent" : "Request to Join"}
+                        Request to Join
                       </Button>
                     </div>
                   )}
