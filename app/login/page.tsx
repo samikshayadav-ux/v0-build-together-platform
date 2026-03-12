@@ -86,10 +86,6 @@ function LoginContent() {
     if (mode === "signup") {
       setActiveTab("signup")
     }
-    
-    // Debug: Log available users
-    const users = getUsers()
-    console.log("[v0] Available users for login:", users.map(u => ({ email: u.email, name: u.name })))
   }, [searchParams])
 
   const handleLogin = (e: React.FormEvent) => {

@@ -78,6 +78,8 @@ import {
   setProjectMember,
   removeProjectMember,
   parseMentions,
+  createRating,
+  getRatingByUsers,
   type Idea,
   type User,
   type ProjectMessage,
@@ -139,6 +141,13 @@ export default function ProjectSpacePage({ params }: { params: Promise<{ id: str
   const [showMemberDialog, setShowMemberDialog] = useState(false)
   const [selectedMember, setSelectedMember] = useState<{ id: string; name: string; role: MemberRole } | null>(null)
   
+  // Rating state
+  const [showRatingDialog, setShowRatingDialog] = useState(false)
+  const [ratingMember, setRatingMember] = useState<{ id: string; name: string } | null>(null)
+  const [ratingValue, setRatingValue] = useState(5)
+  const [ratingReview, setRatingReview] = useState('')
+  const [memberRatings, setMemberRatings] = useState<Record<string, boolean>>({})
+  
   const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: "success" | "error" | "info" }>({
     isVisible: false,
     message: "",
@@ -163,6 +172,18 @@ export default function ProjectSpacePage({ params }: { params: Promise<{ id: str
       const meta = getProjectMeta(fetchedIdea.id)
       if (meta) {
         setProjectStatus(meta.status)
+      }
+      
+      // Check which members have been rated by the owner
+      if (user && fetchedIdea.postedBy === user.id) {
+        const ratings: Record<string, boolean> = {}
+        fetchedIdea.teamMembers.forEach(memberId => {
+          if (memberId !== user.id) {
+            const existingRating = getRatingByUsers(user.id, memberId)
+            ratings[memberId] = !!existingRating
+          }
+        })
+        setMemberRatings(ratings)
       }
     }
   }
@@ -277,6 +298,40 @@ export default function ProjectSpacePage({ params }: { params: Promise<{ id: str
       e.preventDefault()
       handleSendMessage()
     }
+  }
+
+  const handleOpenRating = (memberId: string, memberName: string) => {
+    setRatingMember({ id: memberId, name: memberName })
+    const existingRating = getRatingByUsers(currentUser?.id || '', memberId)
+    if (existingRating) {
+      setRatingValue(existingRating.rating)
+      setRatingReview(existingRating.review || '')
+    } else {
+      setRatingValue(5)
+      setRatingReview('')
+    }
+    setShowRatingDialog(true)
+  }
+
+  const handleSubmitRating = () => {
+    if (!currentUser || !idea || !ratingMember) return
+    
+    createRating({
+      fromUserId: currentUser.id,
+      fromUserName: currentUser.name,
+      toUserId: ratingMember.id,
+      ideaId: idea.id,
+      ideaTitle: idea.title,
+      rating: ratingValue,
+      review: ratingReview || undefined
+    })
+    
+    setMemberRatings(prev => ({ ...prev, [ratingMember.id]: true }))
+    setShowRatingDialog(false)
+    setRatingMember(null)
+    setRatingValue(5)
+    setRatingReview('')
+    setToast({ isVisible: true, message: `Rating submitted for ${ratingMember.name}`, type: "success" })
   }
 
   const isOwner = currentUser?.id === idea?.postedBy
@@ -743,6 +798,54 @@ export default function ProjectSpacePage({ params }: { params: Promise<{ id: str
                 })}
               </div>
 
+              {/* Rate Team - Only visible for owner after project completion */}
+              {isOwner && projectStatus === 'completed' && idea.teamMembers.length > 1 && (
+                <div className="mt-6 border-t border-border pt-4">
+                  <h3 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Star className="h-4 w-4 text-chart-4" />
+                    Rate Collaborators
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground">Rate your team members based on their contributions</p>
+                  <div className="mt-3 space-y-2">
+                    {idea.teamMembers
+                      .filter(memberId => memberId !== currentUser?.id)
+                      .map(memberId => {
+                        const member = getUserById(memberId)
+                        if (!member) return null
+                        const hasRated = memberRatings[memberId]
+                        return (
+                          <div key={memberId} className="flex items-center justify-between rounded-lg border border-border p-2">
+                            <div className="flex items-center gap-2">
+                              <Avatar className="h-6 w-6">
+                                <AvatarFallback className="text-xs">{member.name.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              <span className="text-sm text-foreground">{member.name}</span>
+                            </div>
+                            <Button 
+                              variant={hasRated ? "ghost" : "outline"} 
+                              size="sm" 
+                              className="h-7 text-xs"
+                              onClick={() => handleOpenRating(memberId, member.name)}
+                            >
+                              {hasRated ? (
+                                <>
+                                  <CheckCircle className="mr-1 h-3 w-3 text-green-500" />
+                                  Rated
+                                </>
+                              ) : (
+                                <>
+                                  <Star className="mr-1 h-3 w-3" />
+                                  Rate
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        )
+                      })}
+                  </div>
+                </div>
+              )}
+
               {/* Quick Links */}
               <div className="mt-6 border-t border-border pt-4">
                 <h3 className="text-sm font-medium text-muted-foreground">Quick Links</h3>
@@ -763,6 +866,56 @@ export default function ProjectSpacePage({ params }: { params: Promise<{ id: str
           </div>
         </div>
       </main>
+
+      {/* Rating Dialog */}
+      <Dialog open={showRatingDialog} onOpenChange={setShowRatingDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rate {ratingMember?.name}</DialogTitle>
+            <DialogDescription>
+              Share your experience working with this collaborator on {idea?.title}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="text-sm font-medium text-foreground">Rating</label>
+              <div className="mt-2 flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setRatingValue(star)}
+                    className="p-1 transition-transform hover:scale-110"
+                  >
+                    <Star
+                      className={`h-8 w-8 ${
+                        star <= ratingValue
+                          ? 'fill-chart-4 text-chart-4'
+                          : 'text-muted-foreground/30'
+                      }`}
+                    />
+                  </button>
+                ))}
+                <span className="ml-2 text-sm text-muted-foreground">{ratingValue}/5</span>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground">Review (optional)</label>
+              <Textarea
+                placeholder="Share your experience working together..."
+                value={ratingReview}
+                onChange={(e) => setRatingReview(e.target.value)}
+                className="mt-1.5"
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRatingDialog(false)}>Cancel</Button>
+            <Button onClick={handleSubmitRating}>Submit Rating</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ToastNotification
         message={toast.message}
