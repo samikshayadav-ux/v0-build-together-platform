@@ -33,6 +33,7 @@ import {
   getCollaborators,
   createRating,
   logProfileView,
+  getProjectMeta,
   type User,
   type Idea,
   type CollaboratorRating
@@ -46,6 +47,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
   const [userIdeas, setUserIdeas] = useState<Idea[]>([])
   const [ratings, setRatings] = useState<CollaboratorRating[]>([])
   const [canRate, setCanRate] = useState(false)
+  const [completedProjectName, setCompletedProjectName] = useState<string>("")
   const [existingRating, setExistingRating] = useState<CollaboratorRating | undefined>(undefined)
   const [showRatingModal, setShowRatingModal] = useState(false)
   const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: "success" | "error" | "info" }>({
@@ -72,10 +74,19 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
       setUserIdeas(allIdeas.filter((idea) => idea.postedBy === profile.id))
       setRatings(getRatingsForUser(profile.id))
 
-      // Check if current user can rate this profile
+      // Check if current user can rate this profile (only for completed projects)
       if (user) {
-        const collaborators = getCollaborators(user.id)
-        setCanRate(collaborators.includes(profile.id))
+        // Find a completed shared project
+        const completedSharedProject = allIdeas.find(idea => {
+          if (!idea.teamMembers.includes(user.id) || !idea.teamMembers.includes(profile.id)) {
+            return false
+          }
+          const meta = getProjectMeta(idea.id)
+          return meta?.status === 'completed'
+        })
+        
+        setCanRate(!!completedSharedProject)
+        setCompletedProjectName(completedSharedProject?.title || "")
         
         // Check for existing rating
         const existing = getRatingByUsers(user.id, profile.id)
@@ -233,14 +244,19 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
               {/* Actions */}
               <div className="flex flex-col gap-2">
                 {currentUser && canRate && (
-                  <Button onClick={() => setShowRatingModal(true)}>
-                    <Star className="mr-2 h-4 w-4" />
-                    {existingRating ? "Edit Rating" : "Rate Collaborator"}
-                  </Button>
+                  <div className="flex flex-col gap-2">
+                    <Button onClick={() => setShowRatingModal(true)}>
+                      <Star className="mr-2 h-4 w-4" />
+                      {existingRating ? "Edit Rating" : "Rate Collaborator"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center">
+                      For: {completedProjectName}
+                    </p>
+                  </div>
                 )}
                 {currentUser && !canRate && currentUser.id !== profileUser.id && (
                   <div className="rounded-lg border border-border bg-secondary/30 p-3 text-center text-xs text-muted-foreground">
-                    <p>You can rate collaborators after working on a project together.</p>
+                    <p>You can rate collaborators after completing a project together.</p>
                   </div>
                 )}
               </div>

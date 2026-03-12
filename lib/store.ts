@@ -68,12 +68,14 @@ export interface Comment {
 
 export interface Notification {
   id: string
-  type: 'join_request' | 'idea_view' | 'profile_view' | 'nda_signed' | 'join_accepted' | 'join_rejected'
+  type: 'join_request' | 'idea_view' | 'profile_view' | 'nda_signed' | 'join_accepted' | 'join_rejected' | 'task_assigned' | 'mention' | 'role_changed'
   fromUserId: string
   fromUserName: string
   toUserId: string
   ideaId?: string
   ideaTitle?: string
+  taskId?: string
+  taskTitle?: string
   message?: string
   read: boolean
   createdAt: string
@@ -109,6 +111,42 @@ export interface ProjectMessage {
 }
 
 export type ProjectStatus = 'planning' | 'in_progress' | 'completed' | 'paused'
+export type MemberRole = 'owner' | 'collaborator' | 'viewer'
+export type TaskStatus = 'todo' | 'in_progress' | 'done'
+export type TaskPriority = 'low' | 'medium' | 'high'
+
+export interface ProjectMember {
+  ideaId: string
+  userId: string
+  role: MemberRole
+  joinedAt: string
+}
+
+export interface ProjectTask {
+  id: string
+  ideaId: string
+  title: string
+  description?: string
+  assigneeId?: string
+  assigneeName?: string
+  status: TaskStatus
+  priority: TaskPriority
+  dueDate?: string
+  createdBy: string
+  createdAt: string
+  completedAt?: string
+}
+
+export interface ProjectNote {
+  id: string
+  ideaId: string
+  content: string
+  authorId: string
+  authorName: string
+  mentions: string[]
+  createdAt: string
+  updatedAt?: string
+}
 
 export interface ProjectMeta {
   ideaId: string
@@ -130,6 +168,9 @@ const PROFILE_VIEWS_KEY = 'build_together_profile_views'
 const RATINGS_KEY = 'build_together_ratings'
 const PROJECT_MESSAGES_KEY = 'build_together_project_messages'
 const PROJECT_META_KEY = 'build_together_project_meta'
+const PROJECT_MEMBERS_KEY = 'build_together_project_members'
+const PROJECT_TASKS_KEY = 'build_together_project_tasks'
+const PROJECT_NOTES_KEY = 'build_together_project_notes'
 
 // Helper to get data from localStorage
 function getStorageItem<T>(key: string, defaultValue: T): T {
@@ -586,6 +627,253 @@ export function updateProjectMeta(ideaId: string, updates: Partial<Omit<ProjectM
   metas[index] = { ...metas[index], ...updates }
   setStorageItem(PROJECT_META_KEY, metas)
   return metas[index]
+}
+
+// Project member functions
+export function getProjectMembers(ideaId: string): ProjectMember[] {
+  return getStorageItem<ProjectMember[]>(PROJECT_MEMBERS_KEY, [])
+    .filter(m => m.ideaId === ideaId)
+}
+
+export function getProjectMember(ideaId: string, userId: string): ProjectMember | undefined {
+  return getProjectMembers(ideaId).find(m => m.userId === userId)
+}
+
+export function getMemberRole(ideaId: string, userId: string): MemberRole {
+  const member = getProjectMember(ideaId, userId)
+  if (member) return member.role
+  
+  // Check if owner
+  const idea = getIdeaById(ideaId)
+  if (idea?.postedBy === userId) return 'owner'
+  
+  // Check if team member (default to collaborator)
+  if (idea?.teamMembers.includes(userId)) return 'collaborator'
+  
+  return 'viewer'
+}
+
+export function setProjectMember(ideaId: string, userId: string, role: MemberRole): ProjectMember {
+  const members = getStorageItem<ProjectMember[]>(PROJECT_MEMBERS_KEY, [])
+  const existing = members.findIndex(m => m.ideaId === ideaId && m.userId === userId)
+  
+  const member: ProjectMember = {
+    ideaId,
+    userId,
+    role,
+    joinedAt: existing >= 0 ? members[existing].joinedAt : new Date().toISOString()
+  }
+  
+  if (existing >= 0) {
+    const oldRole = members[existing].role
+    members[existing] = member
+    
+    // Send notification if role changed
+    if (oldRole !== role) {
+      const idea = getIdeaById(ideaId)
+      const changer = getCurrentUser()
+      if (idea && changer && userId !== changer.id) {
+        createNotification({
+          type: 'role_changed',
+          fromUserId: changer.id,
+          fromUserName: changer.name,
+          toUserId: userId,
+          ideaId,
+          ideaTitle: idea.title,
+          message: `Your role changed to ${role}`
+        })
+      }
+    }
+  } else {
+    members.push(member)
+  }
+  
+  setStorageItem(PROJECT_MEMBERS_KEY, members)
+  return member
+}
+
+export function removeProjectMember(ideaId: string, userId: string): void {
+  const members = getStorageItem<ProjectMember[]>(PROJECT_MEMBERS_KEY, [])
+  const filtered = members.filter(m => !(m.ideaId === ideaId && m.userId === userId))
+  setStorageItem(PROJECT_MEMBERS_KEY, filtered)
+  
+  // Also remove from idea's teamMembers
+  const idea = getIdeaById(ideaId)
+  if (idea) {
+    updateIdea(ideaId, { teamMembers: idea.teamMembers.filter(id => id !== userId) })
+  }
+  
+  // Update user's projectsJoined
+  const user = getUserById(userId)
+  if (user) {
+    updateUser(userId, { projectsJoined: user.projectsJoined.filter(id => id !== ideaId) })
+  }
+}
+
+// Project task functions
+export function getProjectTasks(ideaId: string): ProjectTask[] {
+  return getStorageItem<ProjectTask[]>(PROJECT_TASKS_KEY, [])
+    .filter(t => t.ideaId === ideaId)
+    .sort((a, b) => {
+      // Sort by status (todo first, then in_progress, then done), then by priority
+      const statusOrder = { todo: 0, in_progress: 1, done: 2 }
+      const priorityOrder = { high: 0, medium: 1, low: 2 }
+      if (statusOrder[a.status] !== statusOrder[b.status]) {
+        return statusOrder[a.status] - statusOrder[b.status]
+      }
+      return priorityOrder[a.priority] - priorityOrder[b.priority]
+    })
+}
+
+export function createProjectTask(taskData: Omit<ProjectTask, 'id' | 'createdAt'>): ProjectTask {
+  const tasks = getStorageItem<ProjectTask[]>(PROJECT_TASKS_KEY, [])
+  const newTask: ProjectTask = {
+    ...taskData,
+    id: generateId(),
+    createdAt: new Date().toISOString()
+  }
+  tasks.push(newTask)
+  setStorageItem(PROJECT_TASKS_KEY, tasks)
+  
+  // Send notification to assignee
+  if (taskData.assigneeId) {
+    const idea = getIdeaById(taskData.ideaId)
+    const creator = getUserById(taskData.createdBy)
+    if (idea && creator && taskData.assigneeId !== taskData.createdBy) {
+      createNotification({
+        type: 'task_assigned',
+        fromUserId: creator.id,
+        fromUserName: creator.name,
+        toUserId: taskData.assigneeId,
+        ideaId: idea.id,
+        ideaTitle: idea.title,
+        taskId: newTask.id,
+        taskTitle: newTask.title
+      })
+    }
+  }
+  
+  return newTask
+}
+
+export function updateProjectTask(taskId: string, updates: Partial<ProjectTask>): ProjectTask | undefined {
+  const tasks = getStorageItem<ProjectTask[]>(PROJECT_TASKS_KEY, [])
+  const index = tasks.findIndex(t => t.id === taskId)
+  if (index === -1) return undefined
+  
+  const oldTask = tasks[index]
+  tasks[index] = { ...oldTask, ...updates }
+  
+  // Set completedAt if status changed to done
+  if (updates.status === 'done' && oldTask.status !== 'done') {
+    tasks[index].completedAt = new Date().toISOString()
+  }
+  
+  // Send notification if assignee changed
+  if (updates.assigneeId && updates.assigneeId !== oldTask.assigneeId) {
+    const idea = getIdeaById(oldTask.ideaId)
+    const currentUser = getCurrentUser()
+    if (idea && currentUser && updates.assigneeId !== currentUser.id) {
+      createNotification({
+        type: 'task_assigned',
+        fromUserId: currentUser.id,
+        fromUserName: currentUser.name,
+        toUserId: updates.assigneeId,
+        ideaId: idea.id,
+        ideaTitle: idea.title,
+        taskId: taskId,
+        taskTitle: tasks[index].title
+      })
+    }
+  }
+  
+  setStorageItem(PROJECT_TASKS_KEY, tasks)
+  return tasks[index]
+}
+
+export function deleteProjectTask(taskId: string): void {
+  const tasks = getStorageItem<ProjectTask[]>(PROJECT_TASKS_KEY, [])
+  setStorageItem(PROJECT_TASKS_KEY, tasks.filter(t => t.id !== taskId))
+}
+
+// Project note functions
+export function getProjectNotes(ideaId: string): ProjectNote[] {
+  return getStorageItem<ProjectNote[]>(PROJECT_NOTES_KEY, [])
+    .filter(n => n.ideaId === ideaId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+}
+
+export function createProjectNote(noteData: Omit<ProjectNote, 'id' | 'createdAt'>): ProjectNote {
+  const notes = getStorageItem<ProjectNote[]>(PROJECT_NOTES_KEY, [])
+  const newNote: ProjectNote = {
+    ...noteData,
+    id: generateId(),
+    createdAt: new Date().toISOString()
+  }
+  notes.push(newNote)
+  setStorageItem(PROJECT_NOTES_KEY, notes)
+  
+  // Send notifications to mentioned users
+  const idea = getIdeaById(noteData.ideaId)
+  if (idea && noteData.mentions.length > 0) {
+    noteData.mentions.forEach(mentionedUserId => {
+      if (mentionedUserId !== noteData.authorId) {
+        createNotification({
+          type: 'mention',
+          fromUserId: noteData.authorId,
+          fromUserName: noteData.authorName,
+          toUserId: mentionedUserId,
+          ideaId: idea.id,
+          ideaTitle: idea.title,
+          message: noteData.content.substring(0, 100)
+        })
+      }
+    })
+  }
+  
+  return newNote
+}
+
+export function updateProjectNote(noteId: string, content: string, mentions: string[]): ProjectNote | undefined {
+  const notes = getStorageItem<ProjectNote[]>(PROJECT_NOTES_KEY, [])
+  const index = notes.findIndex(n => n.id === noteId)
+  if (index === -1) return undefined
+  
+  notes[index] = { 
+    ...notes[index], 
+    content, 
+    mentions,
+    updatedAt: new Date().toISOString()
+  }
+  setStorageItem(PROJECT_NOTES_KEY, notes)
+  return notes[index]
+}
+
+export function deleteProjectNote(noteId: string): void {
+  const notes = getStorageItem<ProjectNote[]>(PROJECT_NOTES_KEY, [])
+  setStorageItem(PROJECT_NOTES_KEY, notes.filter(n => n.id !== noteId))
+}
+
+// Helper to parse mentions from text (@username)
+export function parseMentions(text: string, teamMembers: string[]): string[] {
+  const mentionRegex = /@(\w+)/g
+  const mentions: string[] = []
+  let match
+  
+  while ((match = mentionRegex.exec(text)) !== null) {
+    const mentionedName = match[1].toLowerCase()
+    // Find user by name
+    teamMembers.forEach(memberId => {
+      const user = getUserById(memberId)
+      if (user && user.name.toLowerCase().includes(mentionedName)) {
+        if (!mentions.includes(user.id)) {
+          mentions.push(user.id)
+        }
+      }
+    })
+  }
+  
+  return mentions
 }
 
 // Initialize with sample data

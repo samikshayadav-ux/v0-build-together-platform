@@ -61,36 +61,27 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
     setIdea(fetchedIdea || null)
     setCurrentUser(user)
     
-    console.log("[v0] Idea Detail Page Load - Idea:", fetchedIdea?.id, "User:", user?.id)
-    
     if (fetchedIdea && user) {
       // Idea owner gets automatic access without NDA
       const isIdeaOwner = String(fetchedIdea.postedBy) === String(user.id)
       const signed = hasSignedNda(user.id, fetchedIdea.id)
       
-      console.log("[v0] NDA Check - isOwner:", isIdeaOwner, "signed:", signed, "postedBy:", fetchedIdea.postedBy, "userId:", user.id)
-      console.log("[v0] Type check - postedBy type:", typeof fetchedIdea.postedBy, "userId type:", typeof user.id)
-      
       // Owner always gets access, or if NDA signed
       if (isIdeaOwner) {
-        console.log("[v0] User is owner - granting automatic access")
         setHasAccess(true)
         setShowNdaModal(false)
         setComments(getCommentsForIdea(fetchedIdea.id))
       } else if (signed) {
-        console.log("[v0] NDA already signed - granting access")
         setHasAccess(true)
         setShowNdaModal(false)
         logAccess(user.id, user.name, fetchedIdea.id, fetchedIdea.title)
         setComments(getCommentsForIdea(fetchedIdea.id))
       } else {
-        console.log("[v0] Not owner and NDA not signed - showing NDA modal")
         setHasAccess(false)
         setShowNdaModal(true)
       }
     } else if (!user) {
       // Not logged in
-      console.log("[v0] User not logged in")
       setShowNdaModal(false)
       setHasAccess(false)
     }
