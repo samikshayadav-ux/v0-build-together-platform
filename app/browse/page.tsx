@@ -143,45 +143,51 @@ export default function BrowsePage() {
 
       <main className="pt-16">
         {/* Header */}
-        <section className="border-b border-border bg-card">
-          <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+        <section className="border-b border-border/50 bg-gradient-to-b from-card to-background">
+          <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+            <div className="flex flex-col gap-8 md:flex-row md:items-center md:justify-between animate-fade-in-up">
               <div>
-                <div className="flex items-center gap-2">
-                  <Lightbulb className="h-6 w-6 text-primary" />
-                  <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Browse Ideas</h1>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+                    <Lightbulb className="h-7 w-7 text-primary" />
+                  </div>
+                  <div>
+                    <h1 className="text-3xl font-extrabold text-foreground sm:text-4xl">Browse Ideas</h1>
+                    <p className="mt-3 text-lg text-muted-foreground leading-relaxed">
+                      Discover startup ideas and find projects to join. All ideas are NDA protected.
+                    </p>
+                  </div>
                 </div>
-                <p className="mt-2 text-muted-foreground">
-                  Discover startup ideas and find projects to join. All ideas are NDA protected.
-                </p>
               </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Shield className="h-4 w-4 text-accent" />
+              <div className="flex items-center gap-3 rounded-full border border-border/50 bg-card/50 backdrop-blur-sm px-6 py-3 text-sm font-medium text-muted-foreground shadow-lg">
+                <Shield className="h-5 w-5 text-accent" />
                 <span>{ideas.length} protected ideas</span>
               </div>
             </div>
 
             {/* Search & Filters */}
-            <div className="mt-8 space-y-4">
-              <div className="flex gap-2">
+            <div className="mt-12 space-y-6 animate-fade-in-up animation-delay-200">
+              <div className="flex gap-4">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Search ideas by title, problem, or skills..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
+                    className="h-14 pl-12 text-base border-2 focus:border-primary transition-all duration-300"
                   />
                 </div>
                 <Button
                   variant="outline"
                   onClick={() => setShowFilters(!showFilters)}
-                  className={showFilters ? "bg-secondary" : ""}
+                  className={`h-14 px-6 text-base font-semibold border-2 transition-all duration-300 hover:scale-105 ${
+                    showFilters ? "bg-primary text-primary-foreground border-primary" : ""
+                  }`}
                 >
-                  <Filter className="mr-2 h-4 w-4" />
+                  <Filter className="mr-3 h-5 w-5" />
                   Filters
                   {selectedSkills.length > 0 && (
-                    <Badge variant="secondary" className="ml-2">
+                    <Badge variant="secondary" className="ml-3 h-6 px-2 text-sm">
                       {selectedSkills.length}
                     </Badge>
                   )}
@@ -190,28 +196,28 @@ export default function BrowsePage() {
 
               {/* Skill Filters */}
               {showFilters && (
-                <div className="rounded-lg border border-border bg-background p-4">
+                <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-6 shadow-lg animate-fade-in-up">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-foreground">Filter by Skills</p>
+                    <p className="text-lg font-semibold text-foreground">Filter by Skills</p>
                     {selectedSkills.length > 0 && (
                       <button
                         onClick={clearFilters}
-                        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                        className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-all duration-300 hover:bg-destructive/10 hover:text-destructive"
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-4 w-4" />
                         Clear all
                       </button>
                     )}
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-4 flex flex-wrap gap-3">
                     {SKILL_FILTERS.map((skill) => (
                       <button
                         key={skill}
                         onClick={() => toggleSkillFilter(skill)}
-                        className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                        className={`rounded-full border-2 px-4 py-2 text-sm font-medium transition-all duration-300 hover:scale-105 ${
                           selectedSkills.includes(skill)
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                            ? "border-primary bg-primary/10 text-primary shadow-md"
+                            : "border-border/50 text-muted-foreground hover:border-primary/50 hover:text-foreground hover:bg-primary/5"
                         }`}
                       >
                         {skill}
@@ -225,23 +231,37 @@ export default function BrowsePage() {
         </section>
 
         {/* Ideas Grid */}
-        <section className="py-12">
+        <section className="py-20 bg-gradient-to-b from-background to-card/20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {filteredIdeas.length > 0 ? (
               <>
-                <p className="mb-6 text-sm text-muted-foreground">
-                  Showing {filteredIdeas.length} idea{filteredIdeas.length !== 1 ? "s" : ""}
-                  {(searchQuery || selectedSkills.length > 0) && " (filtered)"}
-                </p>
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {filteredIdeas.map((idea) => (
-                    <IdeaCard
-                      key={idea.id}
-                      idea={idea}
-                      user={currentUser}
-                      onViewDetails={handleViewDetails}
-                      onJoinProject={handleJoinProject}
-                    />
+                <div className="mb-8 flex items-center justify-between animate-fade-in-up">
+                  <p className="text-lg text-muted-foreground">
+                    Showing <span className="font-semibold text-foreground">{filteredIdeas.length}</span> idea{filteredIdeas.length !== 1 ? "s" : ""}
+                    {(searchQuery || selectedSkills.length > 0) && " (filtered)"}
+                  </p>
+                  {(searchQuery || selectedSkills.length > 0) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearFilters}
+                      className="transition-all duration-300 hover:scale-105"
+                    >
+                      <X className="mr-2 h-4 w-4" />
+                      Clear filters
+                    </Button>
+                  )}
+                </div>
+                <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+                  {filteredIdeas.map((idea, index) => (
+                    <div key={idea.id} className="animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
+                      <IdeaCard
+                        idea={idea}
+                        user={currentUser}
+                        onViewDetails={handleViewDetails}
+                        onJoinProject={handleJoinProject}
+                      />
+                    </div>
                   ))}
                 </div>
               </>

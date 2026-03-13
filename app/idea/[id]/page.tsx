@@ -7,6 +7,7 @@ import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { NdaModal } from "@/components/nda-modal"
 import { ToastNotification } from "@/components/toast-notification"
+import { StarRating } from "@/components/star-rating"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
@@ -33,6 +34,10 @@ import {
   getCommentsForIdea,
   createComment,
   getUserById,
+  getJoinRequestsForIdea,
+  createRating,
+  getRatingByUsers,
+  updateIdea,
   type Idea,
   type User,
   type Comment
@@ -53,6 +58,8 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
     type: "success",
   })
 
+  const [memberRatings, setMemberRatings] = useState<Record<string, number>>({})
+
   useEffect(() => {
     const fetchedIdea = getIdeaById(id)
     const user = getCurrentUser()
@@ -61,21 +68,39 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
     setCurrentUser(user)
     
     if (fetchedIdea && user) {
-      const signed = hasSignedNda(user.id, fetchedIdea.id)
-      setHasAccess(signed)
-      
-      if (signed) {
-        // Log access on page load
+      if (fetchedIdea.postedBy === user.id || fetchedIdea.teamMembers.includes(user.id)) {
+        setHasAccess(true)
+        setShowNdaModal(false)
         logAccess(user.id, user.name, fetchedIdea.id, fetchedIdea.title)
         setComments(getCommentsForIdea(fetchedIdea.id))
       } else {
-        setShowNdaModal(true)
+        const signed = hasSignedNda(user.id, fetchedIdea.id)
+        setHasAccess(signed)
+        setShowNdaModal(false)
+        
+        if (signed) {
+          logAccess(user.id, user.name, fetchedIdea.id, fetchedIdea.title)
+          setComments(getCommentsForIdea(fetchedIdea.id))
+        } else {
+          setShowNdaModal(true)
+        }
       }
     } else if (!user) {
-      // Not logged in
       setShowNdaModal(false)
     }
   }, [id])
+
+  useEffect(() => {
+    if (!idea || !currentUser) return
+
+    const initialRatings: Record<string, number> = {}
+    idea.teamMembers.forEach((memberId) => {
+      const existingRating = getRatingByUsers(currentUser.id, memberId)
+      initialRatings[memberId] = existingRating?.rating ?? 0
+    })
+
+    setMemberRatings(initialRatings)
+  }, [idea, currentUser])
 
   const handleNdaAccept = () => {
     if (!currentUser || !idea) return
@@ -104,9 +129,42 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
     setToast({ isVisible: true, message: "Comment posted!", type: "success" })
   }
 
+  const handleRating = (memberId: string, rating: number) => {
+    if (!currentUser || !idea) return
+    
+    createRating({
+      fromUserId: currentUser.id,
+      fromUserName: currentUser.name,
+      toUserId: memberId,
+      ideaId: idea.id,
+      ideaTitle: idea.title,
+      rating
+    })
+    setMemberRatings((prev) => ({ ...prev, [memberId]: rating }))
+    setToast({ isVisible: true, message: "Rating submitted!", type: "success" })
+  }
+
+  const handleRemoveMember = (memberId: string) => {
+    if (!currentUser || !idea || !isOwner) return
+    
+    updateIdea(idea.id, { teamMembers: idea.teamMembers.filter(id => id !== memberId) })
+    setIdea(prev => prev ? { ...prev, teamMembers: prev.teamMembers.filter(id => id !== memberId) } : null)
+    setToast({ isVisible: true, message: "Member removed from team!", type: "info" })
+  }
+
+  const handleLeaveIdea = () => {
+    if (!currentUser || !idea || isOwner) return
+    
+    updateIdea(idea.id, { teamMembers: idea.teamMembers.filter(id => id !== currentUser.id) })
+    setToast({ isVisible: true, message: "You have left the idea!", type: "info" })
+    // Redirect or lose access
+    router.push("/browse")
+  }
+
   const poster = idea ? getUserById(idea.postedBy) : null
   const isOwner = currentUser?.id === idea?.postedBy
   const hasJoined = idea?.teamMembers.includes(currentUser?.id || "")
+  const hasPendingRequest = idea ? getJoinRequestsForIdea(idea.id).some(req => req.userId === currentUser?.id && req.status === 'pending') : false
 
   if (!idea) {
     return (
@@ -323,13 +381,13 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                       <p className="mt-2 text-sm text-muted-foreground">
                         Interested in working on this idea? Send a request to join the team.
                       </p>
-                      <Button 
-                        className="mt-4 w-full" 
-                        onClick={handleJoinProject}
-                        disabled={hasJoined}
-                      >
-                        {hasJoined ? "Request Sent" : "Request to Join"}
-                      </Button>
+                      {hasJoined ? (
+                        <Badge className="mt-4 bg-green-100 text-green-800">Joined</Badge>
+                      ) : hasPendingRequest ? (
+                        <Button className="mt-4 w-full" disabled>Request Sent</Button>
+                      ) : (
+                        <Button className="mt-4 w-full" onClick={handleJoinProject}>Request to Join</Button>
+                      )}
                     </div>
                   )}
 
@@ -343,22 +401,64 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                       {idea.teamMembers.map((memberId) => {
                         const member = getUserById(memberId)
                         return member ? (
-                          <Link key={memberId} href={`/user/${memberId}`} className="flex items-center gap-3 group">
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback className="bg-secondary text-sm">
-                                {member.name.charAt(0)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="text-sm font-medium text-foreground group-hover:text-primary">{member.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {member.skills.slice(0, 2).join(", ")}
-                              </p>
+                          <div
+                            key={memberId}
+                            className="rounded-xl border border-border bg-card p-4 shadow-sm transition hover:shadow-md"
+                          >
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <Link
+                                href={`/user/${memberId}`}
+                                className="flex min-w-0 items-center gap-4 group flex-1"
+                              >
+                                <Avatar className="h-10 w-10">
+                                  <AvatarFallback className="bg-secondary text-sm">
+                                    {member.name.charAt(0)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary">
+                                    {member.name}
+                                  </p>
+                                  <p className="truncate text-xs text-muted-foreground">
+                                    {member.skills.slice(0, 2).join(", ")}
+                                  </p>
+                                </div>
+                              </Link>
+
+                              <div className="flex items-center gap-3">
+                                {isOwner && memberId !== currentUser?.id && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleRemoveMember(memberId)}
+                                    className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  >
+                                    Remove
+                                  </Button>
+                                )}
+
+                                {isOwner && memberId !== currentUser?.id && (
+                                  <StarRating
+                                    value={memberRatings[memberId] ?? 0}
+                                    onChange={(rating) => handleRating(memberId, rating)}
+                                    size="sm"
+                                  />
+                                )}
+                              </div>
                             </div>
-                          </Link>
+                          </div>
                         ) : null
                       })}
                     </div>
+                    {hasJoined && !isOwner && (
+                      <Button
+                        variant="outline"
+                        className="mt-4 w-full text-destructive hover:text-destructive"
+                        onClick={handleLeaveIdea}
+                      >
+                        Leave Idea
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
