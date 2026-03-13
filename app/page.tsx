@@ -43,7 +43,7 @@ export default function HomePage() {
               <span>Protected by NDA agreements</span>
             </div>
             
-            <h1 className="text-balance text-5xl font-extrabold tracking-tight text-foreground sm:text-7xl lg:text-8xl leading-tight animate-fade-in-up">
+            <h1 className="text-balance text-4xl font-extrabold tracking-tight text-foreground sm:text-6xl lg:text-7xl leading-tight animate-fade-in-up">
               Turn Ideas Into Startups —{" "}
               <span className="bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">Find Your Team.</span>
             </h1>

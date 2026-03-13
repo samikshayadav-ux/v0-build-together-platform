@@ -392,9 +392,9 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                   )}
 
                   {/* Team Members */}
-                  <div className="rounded-xl border border-border bg-card p-6">
-                    <h3 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                      <Users className="h-4 w-4" />
+                  <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-md">
+                    <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                      <Users className="h-5 w-5" />
                       Team Members ({idea.teamMembers.length})
                     </h3>
                     <div className="mt-4 space-y-3">
@@ -403,19 +403,19 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                         return member ? (
                           <div
                             key={memberId}
-                            className="rounded-xl border border-border bg-card p-4 shadow-sm transition hover:shadow-md"
+                            className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 shadow-md hover:shadow-lg hover:scale-[1.01] transition-all duration-200"
                           >
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex flex-col gap-4">
                               <Link
                                 href={`/user/${memberId}`}
                                 className="flex min-w-0 items-center gap-4 group flex-1"
                               >
-                                <Avatar className="h-10 w-10">
-                                  <AvatarFallback className="bg-secondary text-sm">
+                                <Avatar className="h-12 w-12 flex-shrink-0">
+                                  <AvatarFallback className="bg-secondary text-sm font-semibold">
                                     {member.name.charAt(0)}
                                   </AvatarFallback>
                                 </Avatar>
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary">
                                     {member.name}
                                   </p>
@@ -425,26 +425,27 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                                 </div>
                               </Link>
 
-                              <div className="flex items-center gap-3">
-                                {isOwner && memberId !== currentUser?.id && (
+                              {(isOwner && memberId !== currentUser?.id) && (
+                                <div className="flex flex-col gap-3">
+                                  <div className="flex flex-col gap-1">
+                                    <p className="text-xs font-medium text-muted-foreground">Rating</p>
+                                    <StarRating
+                                      value={memberRatings[memberId] ?? 0}
+                                      onChange={(rating) => handleRating(memberId, rating)}
+                                      size="sm"
+                                    />
+                                  </div>
+
                                   <Button
                                     size="sm"
                                     variant="outline"
                                     onClick={() => handleRemoveMember(memberId)}
                                     className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
                                   >
-                                    Remove
+                                    Remove Member
                                   </Button>
-                                )}
-
-                                {isOwner && memberId !== currentUser?.id && (
-                                  <StarRating
-                                    value={memberRatings[memberId] ?? 0}
-                                    onChange={(rating) => handleRating(memberId, rating)}
-                                    size="sm"
-                                  />
-                                )}
-                              </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         ) : null
