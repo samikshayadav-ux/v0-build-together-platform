@@ -392,9 +392,9 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                   )}
 
                   {/* Team Members */}
-                  <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 shadow-md">
-                    <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-                      <Users className="h-5 w-5" />
+                  <div className="rounded-xl border border-gray-700 bg-slate-900 p-6 shadow-lg">
+                    <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-100">
+                      <Users className="h-5 w-5 text-cyan-400" />
                       Team Members ({idea.teamMembers.length})
                     </h3>
                     <div className="mt-4 space-y-3">
@@ -403,7 +403,7 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                         return member ? (
                           <div
                             key={memberId}
-                            className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 shadow-md hover:shadow-lg hover:scale-[1.01] transition-all duration-200"
+                            className="rounded-xl border border-slate-700 bg-slate-800 p-4 shadow-md hover:shadow-xl hover:scale-[1.01] transition-all duration-200"
                           >
                             <div className="flex flex-col gap-4">
                               <Link
@@ -416,10 +416,10 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                                   </AvatarFallback>
                                 </Avatar>
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary">
+                                  <p className="truncate text-sm font-semibold text-slate-100 group-hover:text-cyan-300">
                                     {member.name}
                                   </p>
-                                  <p className="truncate text-xs text-muted-foreground">
+                                  <p className="truncate text-xs text-slate-300">
                                     {member.skills.slice(0, 2).join(", ")}
                                   </p>
                                 </div>
@@ -428,7 +428,7 @@ export default function IdeaDetailPage({ params }: { params: Promise<{ id: strin
                               {(isOwner && memberId !== currentUser?.id) && (
                                 <div className="flex flex-col gap-3">
                                   <div className="flex flex-col gap-1">
-                                    <p className="text-xs font-medium text-muted-foreground">Rating</p>
+                                    <p className="text-xs font-medium text-slate-300">Rating</p>
                                     <StarRating
                                       value={memberRatings[memberId] ?? 0}
                                       onChange={(rating) => handleRating(memberId, rating)}
